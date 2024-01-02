@@ -1,0 +1,1 @@
+A basic CLI chatbot using the OpenAI API
