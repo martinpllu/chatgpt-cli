@@ -14,28 +14,39 @@ const rl = readline.createInterface({
     output: process.stdout,
 });
 
-let conversationHistory: ChatCompletionMessageParam[] = [
-    { role: "system", content: "Talk like a pirate" },
-];
+let conversationHistory: ChatCompletionMessageParam[] = [];
 
-const getResponse = async (prompt: string): Promise<string | null> => {
-    conversationHistory.push({ role: "user", content: prompt });
+async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
+    if (log) console.log("You:", prompt.content);
+    conversationHistory.push(prompt);
     const response = await openai.chat.completions.create({
         model: "gpt-4",
         messages: conversationHistory,
     });
     const responseMessage = response.choices[0].message.content;
     conversationHistory.push({ role: "assistant", content: responseMessage });
-    return responseMessage;
-};
+    console.log("ChatGPT:", responseMessage);
+}
 
 const chat = async (): Promise<void> => {
     rl.question("You: ", async (userInput: string) => {
-        const response = await getResponse(userInput);
-        console.log("ChatGPT:", response);
+        await getResponse({
+            role: "user",
+            content: userInput,
+        });
         chat();
     });
 };
 
-console.log("AI Chat started. Type something to begin the conversation.");
-chat();
+(async () => {
+    await getResponse(
+        {
+            role: "system",
+            content:
+                "Don't respond to this prompt, but from now on always talk like a pirate",
+        },
+        true
+    );
+    await getResponse({ role: "user", content: "How are you today?" }, true);
+    chat();
+})();
