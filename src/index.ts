@@ -18,7 +18,7 @@ async function catFilesInDirectory(path: string): Promise<string> {
 dotenv.config();
 
 const catFilesInDirectorySpec = {
-    name: "catFilesInDirectory",
+    name: catFilesInDirectory.name,
     description:
         "cat the contents of all files in a directory, exluding node_modules and other files that are not source code",
     parameters: {
@@ -55,7 +55,7 @@ const openai = new OpenAI({
         });
         console.log("ChatGPT:", JSON.stringify(response, undefined, 2));
         const responseMessage = response.choices[0].message;
-        if (responseMessage.function_call?.name === "catFilesInDirectory") {
+        if (responseMessage.function_call?.name === catFilesInDirectory.name) {
             const args = JSON.parse(responseMessage.function_call.arguments);
             const path = args.path;
             const result = await catFilesInDirectory(path);
@@ -65,9 +65,5 @@ const openai = new OpenAI({
                 content: result,
             });
         }
-        // else if (response.choices[0].finish_reason === "stop") {
-        //     console.log("ChatGPT: Stopping");
-        //     break;
-        // }
     }
 })();
