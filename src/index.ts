@@ -45,8 +45,11 @@ const writeToFileInDirectorySpec = {
     },
 };
 function writeToFileInDirectory(relativePath: string, contents: string) {
-    const dirPath = path.join(dir, relativePath);
-    writeFileSync(dirPath, contents);
+    const fullPath = path.resolve(dir, relativePath);
+    if (!fullPath.startsWith(path.resolve(dir))) {
+        throw new Error("Path is outside the directory");
+    }
+    writeFileSync(fullPath, contents);
 }
 
 const openai = new OpenAI({
@@ -96,7 +99,6 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
 async function submitPrompt(prompt: ChatCompletionMessageParam) {
     conversationHistory.push(prompt);
     const response = await openai.chat.completions.create({
-        // model: "gpt-4",
         model: "gpt-4-1106-preview",
         messages: conversationHistory,
         functions: [catFilesInDirectorySpec, writeToFileInDirectorySpec],
@@ -106,7 +108,7 @@ async function submitPrompt(prompt: ChatCompletionMessageParam) {
     return response;
 }
 
-const chat = async (): Promise<void> => {
+async function chat() {
     rl.question("You: ", async (userInput: string) => {
         await getResponse({
             role: "user",
@@ -114,17 +116,9 @@ const chat = async (): Promise<void> => {
         });
         chat();
     });
-};
+}
 
 (async () => {
-    // await getResponse(
-    //     {
-    //         role: "system",
-    //         content: `Instead of including code in your responses, use the ${writeToFileInDirectory.name} function to write the code to the relevant file.
-    //         Always write the complete contents of the file, not just the changes.`,
-    //     },
-    //     true
-    // );
     await getResponse(
         {
             role: "user",
