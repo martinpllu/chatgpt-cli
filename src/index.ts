@@ -1,84 +1,73 @@
+import * as dotenv from "dotenv";
+import * as readline from "readline";
+import OpenAI from "openai";
+import { readdirSync } from "fs";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { ChatCompletionMessageParam } from "openai/resources";
 
-import * as dotenv from 'dotenv';
-import * as readline from 'readline';
-import OpenAI from 'openai';
-import { readdirSync } from 'fs';
+const execAsync = promisify(exec);
+
+async function catFilesInDirectory(path: string): Promise<string> {
+    console.log(`JMP catting files...`);
+    const command = `find ${path} -type f -not -path '*/\\.*' -not -path '*/node_modules/*' -not -name 'pnpm-lock.yaml' -not -name 'package-lock.json' -not -name '*.jpg' -not -name '*.jpeg' -not -name '*.png' -not -name '*.gif' -not -name '*.ico' -exec echo {} \\; -exec cat {} \\;`;
+    const { stdout } = await execAsync(command);
+    return stdout;
+}
 
 dotenv.config();
 
-const listDirectorySpec = {
-    name: 'listDirectory',
-    description: 'List the contents of a directory',
+const catFilesInDirectorySpec = {
+    name: "catFilesInDirectory",
+    description:
+        "cat the contents of all files in a directory, exluding node_modules and other files that are not source code",
     parameters: {
         type: "object",
         properties: {
             path: {
-                type: 'string',
-                description: 'The path of the directory to list',
-            }
+                type: "string",
+                description: "The path of the directory to cat files in",
+            },
         },
-        required: ['path'],
-
-    }
-}
-
-function listDirectory(path: string): string[] {
-    return readdirSync(path);
-}
+        required: ["path"],
+    },
+};
 
 const openai = new OpenAI({
-    apiKey: process.env['OPENAI_API_KEY'], // This is the default and can be omitted
-  });
+    apiKey: process.env["OPENAI_API_KEY"], // This is the default and can be omitted
+});
 
-  (async () => {
-    const response = await openai.chat.completions.create({
-        messages: [
-            // { role: 'system', content: 'Give short answers' },
-            { role: 'user', content: 'List the contents of /Users/martin/dev/' }],
-            functions: [listDirectorySpec],
+(async () => {
+    const messages: ChatCompletionMessageParam[] = [
+        {
+            role: "user",
+            // content:
+            //     "Use catFilesInDirectory to get the contents of all files in /Users/martin/dev/reference-app",
+            content:
+                "Use catFilesInDirectory to get the contents of all files in /Users/martin/dev/chatgpt-cli",
+        },
+    ];
+    while (true) {
+        const response = await openai.chat.completions.create({
+            messages,
+            functions: [catFilesInDirectorySpec],
             model: "gpt-4",
         });
-        console.log('ChatGPT:', JSON.stringify(response, undefined, 2));
+        console.log("ChatGPT:", JSON.stringify(response, undefined, 2));
         const responseMessage = response.choices[0].message;
-        if (responseMessage.function_call?.name === 'listDirectory') {
+        if (responseMessage.function_call?.name === "catFilesInDirectory") {
             const args = JSON.parse(responseMessage.function_call.arguments);
             const path = args.path;
-            const result = listDirectory(path);
-            console.log('Directory listing', result);
+            const result = await catFilesInDirectory(path);
+            messages.push({
+                role: "function",
+                name: "catFilesInDirectory",
+                content: result,
+            });
         }
-    })();
-    
-    // model: "gpt-3.5-turbo",
-    
-    // const rl = readline.createInterface({
-        //   input: process.stdin,
-//   output: process.stdout
-// });
-
-
-
-
-// async function askChatGPT(content: string) {
-//     try {
-//         const chatCompletion = await openai.chat.completions.create({
-//             messages: [{ role: 'user', content }],
-//             model: "gpt-3.5-turbo",
-//           });
-//       console.log('ChatGPT:', chatCompletion);
-//     } catch (error) {
-//       console.error('Error:', error);
-//     }
-//   }
-    
-
-// function chatLoop() {
-//   rl.question('You: ', (input) => {
-//     if (input.toLowerCase() === 'exit') {
-//       rl.close();
-//       return;
-//     }
-//     askChatGPT(input).then(() => chatLoop());
-//   });
-// }
-
-// chatLoop();
+        // else if (response.choices[0].finish_reason === "stop") {
+        //     console.log("ChatGPT: Stopping");
+        //     break;
+        // }
+    }
+})();
