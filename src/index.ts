@@ -4,13 +4,29 @@ import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { writeFileSync } from "fs";
+import { existsSync, writeFileSync } from "fs";
 import path from "path";
-
-const dir = `/Users/martin/dev/reference-app`;
-
+import { hideBin } from "yargs/helpers";
+import yargs from "yargs/yargs";
 dotenv.config();
-const execAsync = promisify(exec);
+
+const options = yargs(hideBin(process.argv))
+    .options({
+        directory: {
+            alias: ["d", "dir"],
+            type: "string",
+            describe: `The directory containing the code`,
+            requiresArg: true,
+        },
+    })
+    .parseSync();
+
+const dir = (options.directory as string) || ".";
+
+if (!existsSync(dir)) {
+    console.error(`Directory ${dir} does not exist`);
+    process.exit(1);
+}
 
 const catFilesInDirectorySpec = {
     name: catFilesInDirectory.name,
@@ -19,6 +35,7 @@ const catFilesInDirectorySpec = {
     parameters: {},
 };
 async function catFilesInDirectory(): Promise<string> {
+    const execAsync = promisify(exec);
     const command = `find ${dir} -type f -not -path '*/\\.*' -not -path '*/node_modules/*' -not -name 'pnpm-lock.yaml' -not -name 'package-lock.json' -not -name '*.jpg' -not -name '*.jpeg' -not -name '*.png' -not -name '*.gif' -not -name '*.ico' -exec echo {} \\; -exec cat {} \\;`;
     const { stdout } = await execAsync(command);
     return stdout;
