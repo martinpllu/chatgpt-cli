@@ -8,6 +8,7 @@ import { existsSync, writeFileSync } from "fs";
 import path from "path";
 import { hideBin } from "yargs/helpers";
 import yargs from "yargs/yargs";
+import ora from "ora";
 dotenv.config();
 
 const options = yargs(hideBin(process.argv))
@@ -16,13 +17,16 @@ const options = yargs(hideBin(process.argv))
             alias: ["d", "dir"],
             type: "string",
             describe: `The directory containing the code`,
-            requiresArg: true,
         },
     })
+    .demandOption(["directory"])
     .parseSync();
 
-const dir = (options.directory as string) || ".";
-
+const dir = options.directory as string;
+if (!dir) {
+    console.error(`Please specify a directory`);
+    process.exit(1);
+}
 if (!existsSync(dir)) {
     console.error(`Directory ${dir} does not exist`);
     process.exit(1);
@@ -115,13 +119,20 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
 
 async function submitPrompt(prompt: ChatCompletionMessageParam) {
     conversationHistory.push(prompt);
+    const spinner = ora("ChatGPT").start();
+    process.on("SIGINT", () => {
+        spinner.stop();
+        console.log("\nOperation interrupted by the user.");
+        process.exit(1);
+    });
     const response = await openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         messages: conversationHistory,
         functions: [catFilesInDirectorySpec, writeToFileInDirectorySpec],
     });
+    spinner.stop();
     const totalTokens = response.usage?.total_tokens;
-    console.log(`Used ${totalTokens} tokens`);
+    console.log(`[${totalTokens} tokens]`);
     return response;
 }
 
