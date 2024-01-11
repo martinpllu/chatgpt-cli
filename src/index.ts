@@ -48,32 +48,48 @@ async function catFilesInDirectory(): Promise<string> {
     return stdout;
 }
 
-const writeToFileInDirectorySpec = {
-    name: writeToFileInDirectory.name,
+const writeMultipleFilesInDirectorySpec = {
+    name: "writeMultipleFilesInDirectory",
     description:
-        "write the contents of a file inside the directory, creating the file if it does not exist",
+        "Write contents to multiple files inside the directory, creating each file if it does not exist.",
     parameters: {
         type: "object",
         properties: {
-            relativePath: {
-                type: "string",
-                description:
-                    "The path of the file to write to, relative to the root of the directory",
+            relativePaths: {
+                type: "array",
+                items: {
+                    type: "string",
+                    description:
+                        "The paths of the files to write to, relative to the root of the directory",
+                },
             },
-            contents: {
-                type: "string",
-                description: "The contents of the file",
+            contentsArray: {
+                type: "array",
+                items: {
+                    type: "string",
+                    description: "The contents of the files",
+                },
             },
         },
-        required: ["path", "contents"],
+        required: ["relativePaths", "contentsArray"],
     },
 };
-function writeToFileInDirectory(relativePath: string, contents: string) {
-    const fullPath = path.resolve(absoluteDir, relativePath);
-    if (!fullPath.startsWith(absoluteDir)) {
-        throw new Error("Path is outside the directory");
+
+function writeMultipleFilesInDirectory(
+    relativePaths: string[],
+    contentsArray: string[]
+) {
+    if (relativePaths.length !== contentsArray.length) {
+        throw new Error("The number of paths and contents must be equal");
     }
-    writeFileSync(fullPath, contents);
+
+    for (let i = 0; i < relativePaths.length; i++) {
+        const fullPath = path.resolve(absoluteDir, relativePaths[i]);
+        if (!fullPath.startsWith(absoluteDir)) {
+            throw new Error("One of the paths is outside the directory");
+        }
+        writeFileSync(fullPath, contentsArray[i]);
+    }
 }
 
 const openai = new OpenAI({
@@ -97,13 +113,14 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
         });
         console.log("Complete!");
     } else if (
-        responseMessage.function_call?.name === writeToFileInDirectory.name
+        responseMessage.function_call?.name ===
+        writeMultipleFilesInDirectory.name
     ) {
         const args = JSON.parse(responseMessage.function_call.arguments);
-        writeToFileInDirectory(args.relativePath, args.contents);
+        writeMultipleFilesInDirectory(args.relativePaths, args.contentsArray);
         await submitPrompt({
             role: "function",
-            name: "writeToFileInDirectory",
+            name: "writeMultipleFilesInDirectory",
             content: "Done",
         });
         console.log(`Writing file ${args.relativePath}...`);
@@ -133,11 +150,12 @@ async function submitPrompt(prompt: ChatCompletionMessageParam) {
     const response = await openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         messages: conversationHistory,
-        functions: [catFilesInDirectorySpec, writeToFileInDirectorySpec],
+        functions: [catFilesInDirectorySpec, writeMultipleFilesInDirectorySpec],
     });
     spinner.stop();
     const totalTokens = response.usage?.total_tokens;
     console.log(`[${totalTokens} tokens]`);
+    console.log(JSON.stringify(response, null, 2));
     return response;
 }
 
@@ -164,8 +182,8 @@ async function chat() {
     await getResponse(
         {
             role: "user",
-            // content: `Add a new endpoint /goodbye that returns "Goodbye World!"`,
-            content: `Add types to the code`,
+            content: `Add a new endpoint /goodbye that returns "Goodbye World!", and split the code into app.ts, hello.ts and goodbye.ts`,
+            // content: `Add types to the code`,
         },
         true
     );
