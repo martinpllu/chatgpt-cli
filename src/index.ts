@@ -9,7 +9,7 @@ import { hideBin } from "yargs/helpers";
 import yargs from "yargs/yargs";
 import ora from "ora";
 import promptSync from "prompt-sync";
-const prompt = promptSync();
+const prompt = promptSync({ sigint: true });
 dotenv.config();
 
 const options = yargs(hideBin(process.argv))
@@ -143,7 +143,7 @@ async function submitPrompt(prompt: ChatCompletionMessageParam) {
         messages: conversationHistory,
         functions: [catFilesSpec, writeFilesSpec],
     });
-    spinner.stop();
+    // spinner.stop();
     const totalTokens = response.usage?.total_tokens;
     console.log(`[${totalTokens} tokens]`);
     // console.log('JMP', JSON.stringify(response, null, 2));
@@ -159,11 +159,17 @@ async function chat() {
     await chat();
 }
 
+const systemPrompts = [
+    `Start by reading the contents of all files in the directory.`,
+    `Never output code changes to the console. Always write to files instead.`,
+    `Always write the whole file contents, not just the changes.`,
+];
+
 (async () => {
     await getResponse(
         {
-            role: "user",
-            content: `Get the contents of all files in the directory, then we'll start work`,
+            role: "system",
+            content: systemPrompts.join("\n"),
         },
         false
     );
