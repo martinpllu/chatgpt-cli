@@ -121,10 +121,6 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
             content: responseMessage.content,
         });
     }
-    if (responseMessage.content) {
-        console.log();
-        console.log("ChatGPT:", responseMessage.content);
-    }
 }
 
 async function submitPrompt(prompt: ChatCompletionMessageParam) {
@@ -140,6 +136,11 @@ async function submitPrompt(prompt: ChatCompletionMessageParam) {
     console.log(`[${totalTokens} tokens]`);
     if (logFullResponses) {
         console.log("", JSON.stringify(response, null, 2), "");
+    }
+    const responseMessage = response.choices[0].message;
+    if (responseMessage.content) {
+        console.log();
+        console.log("ChatGPT:", responseMessage.content);
     }
     return response;
 }
@@ -168,9 +169,6 @@ const systemPrompts = [
             content: systemPrompts.join("\n"),
         },
         false
-    );
-    console.log(
-        "ChatGPT: Let's get started! What would you like me to do to the code?"
     );
     await chat();
 })();
