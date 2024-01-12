@@ -1,14 +1,14 @@
 import * as dotenv from "dotenv";
+import { existsSync, writeFileSync } from "fs";
+import { readdir, readFile } from "fs/promises";
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { existsSync, writeFileSync } from "fs";
+import ora from "ora";
 import path from "path";
+import promptSync from "prompt-sync";
 import { hideBin } from "yargs/helpers";
 import yargs from "yargs/yargs";
-import ora from "ora";
-import promptSync from "prompt-sync";
+
 const prompt = promptSync({ sigint: true });
 dotenv.config();
 
@@ -19,11 +19,17 @@ const options = yargs(hideBin(process.argv))
             type: "string",
             describe: `The directory containing the code`,
         },
+        ignorePaths: {
+            type: "array",
+            describe: "Paths to ignore",
+            default: [],
+        },
     })
     .demandOption(["directory"])
     .parseSync();
 
 const dir = options.directory as string;
+const ignorePaths = (options.ignorePaths as string[]) || [];
 if (!dir) {
     console.error(`Please specify a directory`);
     process.exit(1);
@@ -34,18 +40,60 @@ if (!existsSync(dir)) {
 }
 const absoluteDir = path.resolve(dir);
 
+const DEFAULT_IGNORE_PATHS = [
+    `\\.git`,
+    `\\.idea`,
+    `\\.vscode`,
+    `\\.DS_Store`,
+    `\\.env*`,
+    `dist`,
+    `build`,
+    `out`,
+    `node_modules`,
+    `pnpm-lock\\.yaml`,
+    `package-lock\\.json`,
+    `\\.(jpg|jpeg|png|gif|ico)$`,
+];
+
 const catFilesSpec = {
     name: catFiles.name,
     description:
         "cat the contents of all files in the directory, exluding node_modules and other files that are not source code",
     parameters: {},
 };
-async function catFiles(): Promise<string> {
+async function catFiles() {
     console.log(`Reading contents of directory ${absoluteDir}...`);
-    const execAsync = promisify(exec);
-    const command = `find ${absoluteDir} -type f -not -path '*/\\.*' -not -path '*/node_modules/*' -not -name 'pnpm-lock.yaml' -not -name 'package-lock.json' -not -name '*.jpg' -not -name '*.jpeg' -not -name '*.png' -not -name '*.gif' -not -name '*.ico' -exec echo {} \\; -exec cat {} \\;`;
-    const { stdout } = await execAsync(command);
-    return stdout;
+    const allIgnorePaths = [...DEFAULT_IGNORE_PATHS, ...ignorePaths];
+    const files = await getFilesRecursive(absoluteDir, allIgnorePaths);
+    let combinedContent = "";
+    for (const file of files) {
+        combinedContent += (await readFile(file, "utf8")) + "\n";
+    }
+    return combinedContent;
+}
+
+async function getFilesRecursive(
+    dir: string,
+    ignorePatterns: string[]
+): Promise<string[]> {
+    let results: string[] = [];
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+        const fullPath = path.resolve(dir, entry.name);
+        if (entry.isDirectory()) {
+            results = [
+                ...results,
+                ...(await getFilesRecursive(fullPath, ignorePatterns)),
+            ];
+        } else if (!isIgnored(fullPath, ignorePatterns)) {
+            results.push(fullPath);
+        }
+    }
+    return results;
+}
+
+function isIgnored(filePath: string, ignorePatterns: string[]) {
+    return ignorePatterns.some((pattern) => new RegExp(pattern).test(filePath));
 }
 
 const writeFilesSpec = {
@@ -103,7 +151,6 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
     const responseMessage = response.choices[0].message;
     if (responseMessage.function_call?.name === catFiles.name) {
         const result = await catFiles();
-        console.log("Sending directory contents to ChatGPT...");
         await submitPrompt({
             role: "function",
             name: "catFiles",
@@ -151,6 +198,7 @@ async function submitPrompt(prompt: ChatCompletionMessageParam) {
 }
 
 async function chat() {
+    console.log();
     const content = prompt("You: ");
     await getResponse({
         role: "user",
