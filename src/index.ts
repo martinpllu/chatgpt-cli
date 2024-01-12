@@ -1,6 +1,6 @@
 import * as dotenv from "dotenv";
 import { existsSync, writeFileSync } from "fs";
-import { readdir, readFile } from "fs/promises";
+
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources";
 import ora from "ora";
@@ -8,9 +8,17 @@ import path from "path";
 import promptSync from "prompt-sync";
 import { hideBin } from "yargs/helpers";
 import yargs from "yargs/yargs";
+import { readFiles } from "./read-files";
 
 const prompt = promptSync({ sigint: true });
 dotenv.config();
+
+const spinner = ora("ChatGPT");
+process.on("SIGINT", () => {
+    spinner.stop();
+    console.log("\nOperation interrupted by the user.");
+    process.exit(1);
+});
 
 const options = yargs(hideBin(process.argv))
     .options({
@@ -40,61 +48,12 @@ if (!existsSync(dir)) {
 }
 const absoluteDir = path.resolve(dir);
 
-const DEFAULT_IGNORE_PATHS = [
-    `\\.git`,
-    `\\.idea`,
-    `\\.vscode`,
-    `\\.DS_Store`,
-    `\\.env*`,
-    `dist`,
-    `build`,
-    `out`,
-    `node_modules`,
-    `pnpm-lock\\.yaml`,
-    `package-lock\\.json`,
-    `\\.(jpg|jpeg|png|gif|ico)$`,
-];
-
-const catFilesSpec = {
-    name: catFiles.name,
+const readFilesSpec = {
+    name: readFiles.name,
     description:
         "cat the contents of all files in the directory, exluding node_modules and other files that are not source code",
     parameters: {},
 };
-async function catFiles() {
-    console.log(`Reading contents of directory ${absoluteDir}...`);
-    const allIgnorePaths = [...DEFAULT_IGNORE_PATHS, ...ignorePaths];
-    const files = await getFilesRecursive(absoluteDir, allIgnorePaths);
-    let combinedContent = "";
-    for (const file of files) {
-        combinedContent += (await readFile(file, "utf8")) + "\n";
-    }
-    return combinedContent;
-}
-
-async function getFilesRecursive(
-    dir: string,
-    ignorePatterns: string[]
-): Promise<string[]> {
-    let results: string[] = [];
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-        const fullPath = path.resolve(dir, entry.name);
-        if (entry.isDirectory()) {
-            results = [
-                ...results,
-                ...(await getFilesRecursive(fullPath, ignorePatterns)),
-            ];
-        } else if (!isIgnored(fullPath, ignorePatterns)) {
-            results.push(fullPath);
-        }
-    }
-    return results;
-}
-
-function isIgnored(filePath: string, ignorePatterns: string[]) {
-    return ignorePatterns.some((pattern) => new RegExp(pattern).test(filePath));
-}
 
 const writeFilesSpec = {
     name: "writeFiles",
@@ -149,14 +108,13 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
     if (log) console.log("You:", prompt.content);
     const response = await submitPrompt(prompt);
     const responseMessage = response.choices[0].message;
-    if (responseMessage.function_call?.name === catFiles.name) {
-        const result = await catFiles();
+    if (responseMessage.function_call?.name === readFiles.name) {
+        const result = await readFiles(absoluteDir, ignorePaths);
         await submitPrompt({
             role: "function",
-            name: "catFiles",
+            name: "readFiles",
             content: result,
         });
-        console.log("Complete!");
     } else if (responseMessage.function_call?.name === writeFiles.name) {
         const args = JSON.parse(responseMessage.function_call.arguments);
         writeFiles(args.relativePaths, args.contentsArray);
@@ -173,27 +131,23 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
         });
     }
     if (responseMessage.content) {
+        console.log();
         console.log("ChatGPT:", responseMessage.content);
     }
 }
 
 async function submitPrompt(prompt: ChatCompletionMessageParam) {
     conversationHistory.push(prompt);
-    const spinner = ora("ChatGPT").start();
-    process.on("SIGINT", () => {
-        spinner.stop();
-        console.log("\nOperation interrupted by the user.");
-        process.exit(1);
-    });
+    spinner.start();
     const response = await openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         messages: conversationHistory,
-        functions: [catFilesSpec, writeFilesSpec],
+        functions: [readFilesSpec, writeFilesSpec],
     });
-    // spinner.stop();
+    spinner.stop();
     const totalTokens = response.usage?.total_tokens;
     console.log(`[${totalTokens} tokens]`);
-    // console.log('JMP', JSON.stringify(response, null, 2));
+    // console.log(JSON.stringify(response, null, 2));
     return response;
 }
 
