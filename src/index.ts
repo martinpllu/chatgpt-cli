@@ -34,13 +34,13 @@ if (!existsSync(dir)) {
 }
 const absoluteDir = path.resolve(dir);
 
-const catFilesInDirectorySpec = {
-    name: catFilesInDirectory.name,
+const catFilesSpec = {
+    name: catFiles.name,
     description:
         "cat the contents of all files in the directory, exluding node_modules and other files that are not source code",
     parameters: {},
 };
-async function catFilesInDirectory(): Promise<string> {
+async function catFiles(): Promise<string> {
     console.log(`Reading contents of directory ${absoluteDir}...`);
     const execAsync = promisify(exec);
     const command = `find ${absoluteDir} -type f -not -path '*/\\.*' -not -path '*/node_modules/*' -not -name 'pnpm-lock.yaml' -not -name 'package-lock.json' -not -name '*.jpg' -not -name '*.jpeg' -not -name '*.png' -not -name '*.gif' -not -name '*.ico' -exec echo {} \\; -exec cat {} \\;`;
@@ -48,10 +48,10 @@ async function catFilesInDirectory(): Promise<string> {
     return stdout;
 }
 
-const writeMultipleFilesInDirectorySpec = {
-    name: "writeMultipleFilesInDirectory",
+const writeFilesSpec = {
+    name: "writeFiles",
     description:
-        "Write contents to multiple files inside the directory, creating each file if it does not exist.",
+        "Write content to multiple files inside the directory, creating each file if it does not exist.",
     parameters: {
         type: "object",
         properties: {
@@ -75,10 +75,7 @@ const writeMultipleFilesInDirectorySpec = {
     },
 };
 
-function writeMultipleFilesInDirectory(
-    relativePaths: string[],
-    contentsArray: string[]
-) {
+function writeFiles(relativePaths: string[], contentsArray: string[]) {
     if (relativePaths.length !== contentsArray.length) {
         throw new Error("The number of paths and contents must be equal");
     }
@@ -86,7 +83,9 @@ function writeMultipleFilesInDirectory(
     for (let i = 0; i < relativePaths.length; i++) {
         const fullPath = path.resolve(absoluteDir, relativePaths[i]);
         if (!fullPath.startsWith(absoluteDir)) {
-            throw new Error("One of the paths is outside the directory");
+            throw new Error(
+                "One of the paths is outside the directory: " + fullPath
+            );
         }
         writeFileSync(fullPath, contentsArray[i]);
     }
@@ -102,40 +101,32 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
     if (log) console.log("You:", prompt.content);
     const response = await submitPrompt(prompt);
     const responseMessage = response.choices[0].message;
-
-    if (responseMessage.function_call?.name === catFilesInDirectory.name) {
-        const result = await catFilesInDirectory();
+    if (responseMessage.function_call?.name === catFiles.name) {
+        const result = await catFiles();
         console.log("Sending directory contents to ChatGPT...");
         await submitPrompt({
             role: "function",
-            name: "catFilesInDirectory",
+            name: "catFiles",
             content: result,
         });
         console.log("Complete!");
-    } else if (
-        responseMessage.function_call?.name ===
-        writeMultipleFilesInDirectory.name
-    ) {
+    } else if (responseMessage.function_call?.name === writeFiles.name) {
         const args = JSON.parse(responseMessage.function_call.arguments);
-        writeMultipleFilesInDirectory(args.relativePaths, args.contentsArray);
+        writeFiles(args.relativePaths, args.contentsArray);
         await submitPrompt({
             role: "function",
-            name: "writeMultipleFilesInDirectory",
+            name: "writeFiles",
             content: "Done",
         });
-        console.log(`Writing file ${args.relativePath}...`);
+        console.log(`Writing files ${args.relativePaths}...`);
     } else {
         conversationHistory.push({
             role: "assistant",
             content: responseMessage.content,
         });
+    }
+    if (responseMessage.content) {
         console.log("ChatGPT:", responseMessage.content);
-    }
-    if (response.choices.length > 1) {
-        console.log("ChatGPT:", response.choices[1]?.message?.content);
-    }
-    if (response.choices.length > 2) {
-        console.log("ChatGPT:", response.choices[2]?.message?.content);
     }
 }
 
@@ -150,12 +141,12 @@ async function submitPrompt(prompt: ChatCompletionMessageParam) {
     const response = await openai.chat.completions.create({
         model: "gpt-4-1106-preview",
         messages: conversationHistory,
-        functions: [catFilesInDirectorySpec, writeMultipleFilesInDirectorySpec],
+        functions: [catFilesSpec, writeFilesSpec],
     });
     spinner.stop();
     const totalTokens = response.usage?.total_tokens;
     console.log(`[${totalTokens} tokens]`);
-    console.log(JSON.stringify(response, null, 2));
+    // console.log('JMP', JSON.stringify(response, null, 2));
     return response;
 }
 
@@ -178,14 +169,6 @@ async function chat() {
     );
     console.log(
         "ChatGPT: Let's get started! What would you like me to do to the code?"
-    );
-    await getResponse(
-        {
-            role: "user",
-            content: `Add a new endpoint /goodbye that returns "Goodbye World!", and split the code into app.ts, hello.ts and goodbye.ts`,
-            // content: `Add types to the code`,
-        },
-        true
     );
     await chat();
 })();
