@@ -32,12 +32,19 @@ const options = yargs(hideBin(process.argv))
             describe: "Paths to ignore",
             default: [],
         },
+        logFullResponses: {
+            type: "boolean",
+            describe: "Log the full ChatGPT response object",
+        },
     })
     .demandOption(["directory"])
+    .strict()
     .parseSync();
 
 const dir = options.directory as string;
 const ignorePaths = (options.ignorePaths as string[]) || [];
+const logFullResponses = options.logFullResponses as boolean;
+
 if (!dir) {
     console.error(`Please specify a directory`);
     process.exit(1);
@@ -131,7 +138,9 @@ async function submitPrompt(prompt: ChatCompletionMessageParam) {
     spinner.stop();
     const totalTokens = response.usage?.total_tokens;
     console.log(`[${totalTokens} tokens]`);
-    // console.log(JSON.stringify(response, null, 2));
+    if (logFullResponses) {
+        console.log("", JSON.stringify(response, null, 2), "");
+    }
     return response;
 }
 
@@ -149,6 +158,7 @@ const systemPrompts = [
     `Start by reading the contents of all files in the directory.`,
     `Never output code changes to the console. Always write to files instead.`,
     `Always write the whole file contents, not just the changes.`,
+    `Don't suggest any changes after you read the files for the first time.`,
 ];
 
 (async () => {
