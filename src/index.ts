@@ -1,6 +1,5 @@
 import * as dotenv from "dotenv";
-import { existsSync, writeFileSync } from "fs";
-
+import { existsSync } from "fs";
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources";
 import ora from "ora";
@@ -9,6 +8,7 @@ import promptSync from "prompt-sync";
 import { hideBin } from "yargs/helpers";
 import yargs from "yargs/yargs";
 import { readFiles } from "./read-files";
+import { writeFiles } from "./write-files";
 
 const prompt = promptSync({ sigint: true });
 dotenv.config();
@@ -51,7 +51,7 @@ const absoluteDir = path.resolve(dir);
 const readFilesSpec = {
     name: readFiles.name,
     description:
-        "cat the contents of all files in the directory, exluding node_modules and other files that are not source code",
+        "Read the contents of all files in the directory, apart from 'ignored' files like node_modules",
     parameters: {},
 };
 
@@ -82,22 +82,6 @@ const writeFilesSpec = {
     },
 };
 
-function writeFiles(relativePaths: string[], contentsArray: string[]) {
-    if (relativePaths.length !== contentsArray.length) {
-        throw new Error("The number of paths and contents must be equal");
-    }
-
-    for (let i = 0; i < relativePaths.length; i++) {
-        const fullPath = path.resolve(absoluteDir, relativePaths[i]);
-        if (!fullPath.startsWith(absoluteDir)) {
-            throw new Error(
-                "One of the paths is outside the directory: " + fullPath
-            );
-        }
-        writeFileSync(fullPath, contentsArray[i]);
-    }
-}
-
 const openai = new OpenAI({
     apiKey: process.env["OPENAI_API_KEY"] as string,
 });
@@ -117,13 +101,13 @@ async function getResponse(prompt: ChatCompletionMessageParam, log = false) {
         });
     } else if (responseMessage.function_call?.name === writeFiles.name) {
         const args = JSON.parse(responseMessage.function_call.arguments);
-        writeFiles(args.relativePaths, args.contentsArray);
+        writeFiles(absoluteDir, args.relativePaths, args.contentsArray);
         await submitPrompt({
             role: "function",
             name: "writeFiles",
             content: "Done",
         });
-        console.log(`Writing files ${args.relativePaths}...`);
+        console.log(`Writing ${args.relativePaths}`);
     } else {
         conversationHistory.push({
             role: "assistant",
