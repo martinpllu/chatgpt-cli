@@ -1,7 +1,7 @@
 {
-  "name": "chatgpt-cli",
+  "name": "chiz",
   "version": "1.0.0",
-  "description": "CLI tool to interact with ChatGPT using OpenAI API",
+  "description": "Send the contents of your app to OpenAI's GPT-4 API and ",
   "main": "dist/index.js",
   "scripts": {
     "start": "tsx src/index.ts",

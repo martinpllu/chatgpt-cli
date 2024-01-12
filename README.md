@@ -1,6 +1,6 @@
-# chum
+# chisel
 
-Give ChatGPT direct access to read and write your application's code
+Give ChatGPT direct access to read and write your application code
 
 ## Status
 
@@ -10,10 +10,8 @@ Currently this is only suitable for very small apps
 
 ## Quick Start
 
-TODO - install from npm
-
-- `git clone https://github.com/martinpllu/chum`
-- `cd chum`
+- `git clone https://github.com/martinpllu/chisel`
+- `cd chisel`
 - `npm install`
 - Add a file `.env` containing:
 
@@ -22,33 +20,16 @@ OPENAI_API_KEY=your_api_key_here
 ```
 
 - Start via `npx tsx src/index.ts --directory=/path/to/your/app`
-- `chum` will start by sending the content of ALL FILES in the directory to chatgpt. 
-- Prompt the CLI to make a code change, e.g. `Improve the README`
-- chum will change the required file(s)
+- `chisel` will start by sending the content of all files in the directory to chatgpt. 
+  - Files in `src/read-files.ts#DEFAULT_IGNORE_PATHS` will be ignored, as will any glob paths passed as `--ignorePaths`
+- Prompt the CLI to make a code change, e.g. `Improve the README` and `chisel` will change the required file(s)
+- You can also ask `chisel` questions about the code.
 
-To get started with `chatgpt-cli`, follow these steps:
+## TODO
 
-1. Install the package globally using npm:
-
-```bash
-npm install -g chatgpt-cli
-```
-
-2. Configure your OpenAI API key in a `.env` file:
-
-```env
-OPENAI_API_KEY=your_api_key_here
-```
-
-3. Navigate to the directory containing the code you want to work on.
-
-4. Run the chatbot with the directory option:
-
-```bash
-chatgpt-cli --directory .
-```
-
-5. Interact with the chatbot in your terminal. Give it commands or ask for suggestions, and it will use the OpenAI API to assist you.
+- Install from npm
+- Test with larger applications
+- Stream responses
 
 ## License
 

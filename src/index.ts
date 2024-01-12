@@ -29,7 +29,8 @@ const options = yargs(hideBin(process.argv))
         },
         ignorePaths: {
             type: "array",
-            describe: "Paths to ignore",
+            describe:
+                "Paths to ignore. You can specify multiple, e.g. --ignorePaths 'path/to/ignore1' --ignorePaths 'path/to/ignore2'",
             default: [],
         },
         logFullResponses: {
